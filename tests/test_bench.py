@@ -112,6 +112,19 @@ class Metrics(unittest.TestCase):
         self.assertTrue(r["success"])
         self.assertEqual(r["tool_calls"], 4)  # each tool retried once after the fault
 
+    def test_text_agents_accept_native_tool_calls(self):
+        # Some endpoints answer with native tool calls even when no tools were offered.
+        s1 = [("", [call("lookup", {"query": "order 1042"})]),
+              ("", [call("calculator", {"expression": "3*250"})]), ("FINAL: 750", [])]
+        r = run_one(AGENTS["text_react"], BY_ID["order_total"], FakeClient(s1), ["m1"], "normal")
+        self.assertTrue(r["success"])
+        self.assertEqual(r["tool_calls"], 2)
+        s2 = [("", [call("lookup", {"query": "order 1042"}, 0),
+                    call("calculator", {"expression": "3*250"}, 1)]), ("FINAL: 750", [])]
+        r = run_one(AGENTS["plan_execute"], BY_ID["order_total"], FakeClient(s2), ["m1"], "normal")
+        self.assertTrue(r["success"])
+        self.assertEqual(r["tool_calls"], 2)
+
     def test_summary(self):
         rows = [run_one(AGENTS["tool_calling"], BY_ID["order_total"],
                         FakeClient(list(ORDER_SCRIPT)), ["m1"], "normal") for _ in range(3)]

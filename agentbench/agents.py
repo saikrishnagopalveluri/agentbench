@@ -12,6 +12,16 @@ SYSTEM = ("You are a careful operations assistant. Use the tools for facts and a
           "If a tool fails, retry once. Finish with 'FINAL: <answer>'.")
 
 
+def _as_text(r) -> str:
+    """Some endpoints return native tool calls even when no tools were offered (seen on
+    Pollinations' gpt-oss-20b). Text-based agents read those as their own ACTION lines,
+    so they are judged on their design, not on the endpoint's quirk."""
+    text = r.content or ""
+    for tc in r.tool_calls or []:
+        text += f"\nACTION: {tc['function']['name']} {json.dumps(parse_args(tc))}"
+    return text.strip()
+
+
 def _final(text: str) -> str:
     m = re.search(r"FINAL:\s*(.*)", text or "", re.S)
     return (m.group(1) if m else text or "").strip()
@@ -47,15 +57,16 @@ class TextReActAgent:
         msgs = [{"role": "system", "content": self.PROMPT}, {"role": "user", "content": prompt}]
         while True:
             r = env.llm(msgs, use_tools=False)
-            m = re.search(r"ACTION:\s*(\w+)\s*(\{.*\})", r.content or "", re.S)
-            if not m or "FINAL:" in (r.content or "").split("ACTION:")[0]:
-                return _final(r.content)
+            text = _as_text(r)
+            m = re.search(r"ACTION:\s*(\w+)\s*(\{.*?\})\s*$", text, re.S | re.M)
+            if not m or "FINAL:" in text.split("ACTION:")[0]:
+                return _final(text)
             try:
                 args = json.loads(m.group(2))
             except json.JSONDecodeError:
                 args = {}
             out = env.call_tool(m.group(1), args)
-            msgs += [{"role": "assistant", "content": r.content},
+            msgs += [{"role": "assistant", "content": text},
                      {"role": "user", "content": f"OBSERVATION: {out}"}]
 
 
@@ -75,6 +86,8 @@ class PlanExecuteAgent:
             plan = json.loads(m.group(0)) if m else []
         except json.JSONDecodeError:
             plan = []
+        if not plan and r.tool_calls:  # endpoint answered with native calls: use them as the plan
+            plan = [{"tool": tc["function"]["name"], "args": parse_args(tc)} for tc in r.tool_calls]
         results = []
         for step in plan[:6]:
             name, args = step.get("tool"), step.get("args") or {}
@@ -86,7 +99,7 @@ class PlanExecuteAgent:
                        {"role": "user", "content": prompt + "\n\nTool results:\n" +
                         "\n".join(results) + "\nIf a calculation is still needed, do it "
                         "carefully. Reply FINAL: <answer>."}], use_tools=False)
-        return _final(ans.content)
+        return _final(_as_text(ans))
 
 
 class NoToolsBaseline:

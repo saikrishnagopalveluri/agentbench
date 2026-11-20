@@ -76,6 +76,13 @@ export AGENTBENCH_API_KEY=your_key
 python -m agentbench.runner --models llama-3.1-8b-instant
 ```
 
+No key at all? Pollinations serves an open model (gpt-oss-20b) keyless, at one reply every 45 seconds. The client waits and retries on rate-limit replies (429, or 402 "free limit"), so a provider limit is never scored as an agent failure:
+
+```bash
+export AGENTBENCH_BASE_URL=https://text.pollinations.ai/openai
+python -m agentbench.runner --models openai --repeats 1 --min-interval 46
+```
+
 Useful flags: `--agents tool_calling,plan_execute`, `--tasks order_total,ceo`, `--scenarios normal,misleading`, `--models primary,fallback` (comma-separated fallback chain), `--min-interval 3` (seconds between calls, for free-tier rate limits).
 
 Open `results/report.html` in a browser.
@@ -105,6 +112,7 @@ tests/        offline unit tests
 
 * Tasks are small and synthetic so that success can be checked deterministically; real-world task suites can be added in `tasks.py`.
 * Cost uses a static price table.
+* Some endpoints return native tool calls even when no tools are offered (seen on Pollinations' gpt-oss-20b). The first full run scored the text-based agents near zero because of this; the traces showed it, the text agents now read such calls as their own ACTION lines, and the original run is kept in `results/runs_v1_before_textagent_fix.json`.
 * Fault injection is simulated inside the environment; Bifrost's own fallback and retry settings can be benchmarked by pointing several runs at differently configured gateways.
 
 ## Team

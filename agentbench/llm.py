@@ -6,6 +6,7 @@ OpenAI-compatible provider. Only the standard library is used.
 from __future__ import annotations
 
 import json
+import re
 import os
 import time
 import urllib.error
@@ -35,6 +36,7 @@ class ChatClient:
         self.api_key = api_key or os.environ.get("AGENTBENCH_API_KEY", "")
         self.timeout = timeout
         self.min_interval = min_interval
+        self.max_retries = 8
         self._last = 0.0
 
     def _post(self, payload: dict) -> dict:
@@ -44,19 +46,21 @@ class ChatClient:
         req = urllib.request.Request(
             self.base_url + "/chat/completions",
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {self.api_key}",
-                     "User-Agent": "agentbench/0.1"},
+            headers={"Content-Type": "application/json", "User-Agent": "agentbench/0.1",
+                     **({"Authorization": f"Bearer {self.api_key}"} if self.api_key else {})},
         )
-        for attempt in range(4):
+        for attempt in range(self.max_retries + 1):
             try:
                 self._last = time.time()
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
                     return json.loads(r.read())
             except urllib.error.HTTPError as e:
                 body = e.read().decode(errors="replace")[:300]
-                if e.code == 429 and attempt < 3:
-                    time.sleep(2 ** attempt * 5)
+                # 429, or 402 "free limit" from keyless tiers: wait and retry, never
+                # score a provider rate limit as an agent failure.
+                if e.code in (402, 429) and attempt < self.max_retries:
+                    m = re.search(r"[Rr]etry after (\d+)", body)
+                    time.sleep(int(m.group(1)) + 2 if m else 2 ** attempt * 5)
                     continue
                 raise RuntimeError(f"HTTP {e.code}: {body}") from None
         raise RuntimeError("rate limited")

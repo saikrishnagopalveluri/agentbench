@@ -68,6 +68,7 @@ def main(argv=None):
                    help="comma-separated fallback chain, Bifrost style provider/model")
     p.add_argument("--min-interval", type=float, default=2.0, help="seconds between LLM calls")
     p.add_argument("--out", default="results")
+    p.add_argument("--resume", action="store_true", help="keep runs already in OUT/runs.json")
     a = p.parse_args(argv)
 
     client = ChatClient(min_interval=a.min_interval)
@@ -75,9 +76,14 @@ def main(argv=None):
     rows = []
     out = Path(a.out)
     out.mkdir(exist_ok=True)
+    if a.resume and (out / "runs.json").exists():
+        rows = json.loads((out / "runs.json").read_text())
+    done = {(r["agent"], r["task"], r["scenario"], r.get("repeat", 0)) for r in rows}
     combos = [(ag, t, s, i) for ag in a.agents.split(",") for t in a.tasks.split(",")
               for s in a.scenarios.split(",") for i in range(a.repeats)]
     for n, (ag, t, s, i) in enumerate(combos, 1):
+        if (ag, t, s, i) in done:
+            continue
         r = run_one(AGENTS[ag], BY_ID[t], client, models, s)
         r["repeat"] = i
         rows.append(r)

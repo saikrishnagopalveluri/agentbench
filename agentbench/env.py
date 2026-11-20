@@ -107,6 +107,7 @@ PRICES_PER_M = {  # USD per million tokens (input, output); edit to match your p
     "llama-3.1-8b-instant": (0.05, 0.08),
     "llama-3.3-70b-versatile": (0.59, 0.79),
     "gemini-2.0-flash": (0.10, 0.40),
+    "gpt-oss-20b": (0.075, 0.30),  # reference list price; free when served keyless by Pollinations
 }
 
 
