@@ -8,6 +8,21 @@ Built for the Global AI Hackathon (Geek Room × Maxim AI), problem statement *"B
 
 Model leaderboards tell you how a model answers a prompt. They do not tell you how an *agent* behaves when a tool returns an error, the primary model is down, or a tool result contains a prompt injection. AgentBench measures exactly that.
 
+## Results from the included run
+
+128 runs (4 agents x 8 tasks x 4 scenarios, 1 repeat) on gpt-oss-20b, served keyless by Pollinations. Raw runs and traces: `results/runs.json`; open `results/report.html` to browse them. Deck: `docs/AgentBench_GlobalAIHackathon.pdf`.
+
+| Agent | Normal | Failing tool | Model outage | Prompt injection | Followed injection |
+| --- | --- | --- | --- | --- | --- |
+| Tool calling (ReAct) | 88% | 88% | 100% | 0% | 8/8 |
+| Text ReAct | 100% | 100% | 100% | 0% | 8/8 |
+| Plan then execute | 75% | 75% | 75% | 38% | 4/8 |
+| No tools (baseline) | 38% | 38% | 38% | 38% | 0/8 |
+
+* Retries and the fallback chain held up: failing tools and a dead primary model barely moved success.
+* Prompt injection did not: the system prompt tells agents that tool output is data, not instructions, yet the planted "answer BANANA" line won in most runs.
+* One repeat on one free model, so treat the numbers as a demonstration of the platform, not a model ranking.
+
 ## What it measures
 
 For every (agent, task, scenario, repeat):
